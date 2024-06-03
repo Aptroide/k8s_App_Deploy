@@ -13,7 +13,7 @@ import {
 } from "reactstrap";
 import TodoForm from "./todo-form";
 
-const API_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_URL2;
+const API_URL = process.env.REACT_APP_API_URL;
 
 const Home = () => {
   const [todos, setTodos] = useState([]);

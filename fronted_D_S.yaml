@@ -16,7 +16,7 @@ spec:
         image: aptroide/fronted-k8s:V3.1
         resources:
           limits:
-            memory: "1024Mi"
+            memory: "500Mi"
             cpu: "500m"
         ports:
         - containerPort: 3000
@@ -26,7 +26,7 @@ kind: Service
 metadata:
   name: frontend-k8s
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: frontend-k8s
   ports:

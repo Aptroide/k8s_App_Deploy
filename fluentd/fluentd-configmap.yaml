@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: kube-system
+data:
+  fluent.conf: |
+    <source>
+      @type forward
+    </source>
+    <match **>
+      @type stdout
+    </match>

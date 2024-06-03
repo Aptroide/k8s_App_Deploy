@@ -6,7 +6,9 @@
 - [Application Description](#application-description)
 - [Containerization](#containerization)
 - [Kubernetes Configuration](#kubernetes-configuration)
+- [Scaling](#scaling)
 - [Networking](#networking)
+- [Monitoring](#monitoring)
 
 ## Objective
 
@@ -63,6 +65,11 @@ Inside the `docker-frontend-backend-db` folder , the base application is divided
 
     CMD ["node", "server.js"]
     ```
+Once we have our Dockerfiles, we need to build them and then push them to Docker Hub so they can be downloaded inside each pod. To accomplish this, we use the following commands:
+```bash
+docker build . -t <docker hub username>/<image_name>:<tag>
+docker push <docker hub username>/<image_name>:<tag>
+```
 
 To containerize the **database** we use the base image available on docker hub called `mongo`
 
@@ -123,13 +130,62 @@ Overview of the Kubernetes deployment and service configurations for the web app
 
 - **ClusterIP:** Used for internal communication within the Kubernetes cluster. This is used for **database service (MongoDB)** to ensure secure and efficient access within the cluster.
 
-- **NodePort:** Used on **Frontend and Backend services** Exposes the service on each node's IP at a static port. This is suitable because these services need to be accessible from outside the Kubernetes cluster, allowing external traffic to reach the application.
+- **LoadBalancer:** Used on **Frontend and Backend services** Exposes the service on each node's IP at a static port. This is suitable because these services need to be accessible from outside the Kubernetes cluster, allowing external traffic to reach the application.
 
 In the Frontend deployment, we allocate more resources compared to the backend deployment. This is necessary because React requires additional memory to compile its dependencies and render the graphical interface.
 
 By separating the deployments and services, we achieve modularity, scalability, and ease of management, ensuring each component of the application can be independently managed and scaled as needed.
 
+## Scaling
 
+To Implement horizontal autoscaling (HPA) for the backend deployment based on CPU utilization, we first need to enable `metrics-server` addon of :
+```bash
+minikube addons enable metrics-server
+```
+
+Once we have this, we use `hpa_backend.yaml` to deploy the service:
+
+```bash
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-k8s-pod-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend-k8s # name of the deployment where the HPA will be use
+  minReplicas: 5
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80 # max CPU utilization
+```
+Next, we apply this YAML file and check if the configuration is running correctly.
+
+![start](/img/1.1.png)
+
+We can see that it works by running
+
+```bash
+k get all
+```
+![start](/img/1.2.png)
+
+to test this, we use the 
+
+```bash
+ while true; do wget -q -O- http://192.168.59.101:30303/api/todos; done
+```
+![start](/img/1.4.png)
+
+This will increase CPU utilization. As depicted in the image below, the number of backend nodes increases because we set the minimum number of pods to 5. However, since they never reach the 80% CPU threshold specified in the YAML file, everything is functioning normally.
+
+![start](/img/1.5.png)
 ## Networking
 
 To test connectivity between pods, we first need to start minikube cluster using:
@@ -195,3 +251,53 @@ Using the names and IP addresses of the pods, we can check connectivity between 
     kubectl exec db-k8s-86f6b7c6-562wq -- ping 10.244.0.53
     ```
     ![start](/img/5.png)
+
+We also can check that the app its running inside our minikube cluster:
+![start](/img/app1.png)
+
+API conexion response:
+![start](/img/app2.png)
+
+## Monitoring
+
+To use prometheus for Monitoring, we first need to disable `metrics-server`
+
+```bash
+minikube addons disable metrics-server
+```
+
+Next we clone the repository
+```bash
+git clone https://github.com/prometheus-operator/kube-prometheus.git
+```
+
+and run `prometheus.sh` script to apply all the YAML files inside `manifests` 
+```bash
+#!/bin/bash
+need to use kubectl create instead.
+kubectl apply --server-side -f manifests/setup
+kubectl wait \
+	--for condition=Established \
+	--all CustomResourceDefinition \
+	--namespace=monitoring
+kubectl apply -f manifests/
+```
+
+![start](/img/2.1.png)
+
+This will create a new `namespace` called `monitoring`
+
+![start](/img/2.2.png)
+
+We will use `Grafana` pod, so we need to do a port-forward:
+
+```bash
+ k -n monitoring port-forward grafana-854bdcdf45-nmpnl 3000:3000
+```
+![start](/img/2.3.png)
+
+Now we can log in to `Grafana` to monitor using default dashboards. (admin - admin are the inicial credentials)
+
+![start](/img/2.4.png)
+![start](/img/2.5.png)
+
